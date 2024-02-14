@@ -1,7 +1,7 @@
-# StringIconv
+# SwiftIconv
 Decode bytes array to String using iconv.
-Foundation.framework does not provide a simple decoding method 
-that discards illegal sequence or transliterate unsupported characters. StringIconv provides a feasible method that statisfies the problem.
+Foundation.framework does not provide a simple decoding method
+that discards illegal sequence or transliterate unsupported characters. SwiftIconv provides a feasible method that statisfies the problem.
 
 ### case - from Data to String
 

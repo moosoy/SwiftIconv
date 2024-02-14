@@ -9,12 +9,12 @@
 import Swift
 
 #if os(OSX) || os(iOS) || os(tvOS) || os(watchOS)
-    import Darwin.POSIX.iconv
-    import Foundation
+import Darwin.POSIX.iconv
+import Foundation
 #elseif os(Linux)
-    import Glibc
-    import SwiftGlibc.POSIX.iconv
-    import SwiftGlibc.C.errno
+import Glibc
+import SwiftGlibc.POSIX.iconv
+import SwiftGlibc.C.errno
 #endif
 
 /// Buffer length of the bytes array to be passed to iconv.
@@ -42,7 +42,7 @@ public enum IconvInternlEncoding {
     case utf16
     case utf16BigEndian
     case utf16LittleEndian
-    
+
     var stringEncoding: String.Encoding {
         switch self {
         case .utf16:
@@ -83,7 +83,7 @@ private func process_iconvlist(namescount: UInt32, names: UnsafePointer<UnsafePo
     guard let names = names else { return -1 }
     for i in 0..<namescount {
         guard let namePointer = names[Int(i)] else { return -1 }
-        guard let name = String(validatingUTF8:namePointer) else { return -1 }
+        guard let name = String(validatingUTF8: namePointer) else { return -1 }
         array.pointee.append(name)
     }
     return 0
@@ -100,7 +100,7 @@ private func process_canonical_iconvlist(namescount: UInt32, names: UnsafePointe
     for i in 0..<namescount {
         guard let namePointer = names[Int(i)] else { return -1 }
         guard let canonicalNamePointer = iconv_canonicalize(namePointer) else { return -1 }
-        guard let canonicalName = String(validatingUTF8:canonicalNamePointer) else { return -1 }
+        guard let canonicalName = String(validatingUTF8: canonicalNamePointer) else { return -1 }
         array.pointee.append(canonicalName)
     }
     return 0
@@ -113,28 +113,28 @@ extension String {
      */
     public static var iconvlist: [String] {
         var list: [String] = []
-        let array = withUnsafeMutablePointer(to: &list.self) {
+        let array = Swift.withUnsafeMutablePointer(to: &list.self) {
             return UnsafeMutableRawPointer($0)
         }
         Darwin.iconvlist(process_iconvlist, array)
         return list
     }
-    
+
     /**
      Listing of canonical name of the locale independent encodings as an array of `String`.
      */
     public static var canonicalIconvlist: [String] {
         var list: [String] = []
-        let array = withUnsafeMutablePointer(to: &list.self) {
+        let array = Swift.withUnsafeMutablePointer(to: &list.self) {
             return UnsafeMutableRawPointer($0)
         }
         Darwin.iconvlist(process_canonical_iconvlist, array)
         return Array(Set(list))
     }
-    
+
     /**
      Decode `Data` object to `String` using iconv directly.
-     
+
      - parameter data: `Data` object to be decoded.
      - parameter toCode: The character encoding of String to be output.
      - parameter fromCode: The character encoding of bytes array to be decoded.
@@ -144,10 +144,10 @@ extension String {
      */
     public static func decode(pointer: UnsafePointer<Int8>, count: Int, toCode: String, fromCode: String, discardIllegalSequence: Bool = false, transliterate: Bool = false) throws -> Data {
         let conversionDescriptor: iconv_t = iconv_open(toCode, fromCode)
-        
+
         /// Check whether iconv could open a conversion descriptor.
         guard Int(bitPattern: conversionDescriptor) != -1 else { throw IconvError.invalidEncodingName }
-        
+
         if transliterate {
             var value = 1
             iconvctl(conversionDescriptor, ICONV_SET_TRANSLITERATE, &value)
@@ -156,19 +156,19 @@ extension String {
             var value = 1
             iconvctl(conversionDescriptor, ICONV_SET_DISCARD_ILSEQ, &value)
         }
-        
+
         let buffer = UnsafeMutablePointer<Int8>.allocate(capacity: iconvBufferLength)
         defer { buffer.deallocate() }
-        
+
         var inBytesLeft = Int(count)
         var inBuf: UnsafeMutablePointer<Int8>? = UnsafeMutablePointer<Int8>(mutating: pointer)
-        
+
         var outputData = Data()
-        
+
         repeat {
             var outBuf: UnsafeMutablePointer<Int8>? = buffer
             var outBytesLeft = iconvBufferLength
-            
+
             /* Converts, using conversion descriptor `cd', at most `*inbytesleft' bytes
              starting at `*inbuf', writing at most `*outbytesleft' bytes starting at
              `*outbuf'.
@@ -176,7 +176,7 @@ extension String {
              Decrements `*outbytesleft' and increments `*outbuf' by the same amount. */
             let iconvStatus = iconv(conversionDescriptor, &inBuf, &inBytesLeft, &outBuf, &outBytesLeft)
             let errorLocation = outputData.count + (iconvBufferLength - outBytesLeft)
-            //failed
+            // failed
             if iconvStatus == -1 {
                 switch errno {
                 case EILSEQ:
@@ -194,16 +194,16 @@ extension String {
             })
             outputData.append(pp, count: iconvBufferLength - outBytesLeft)
         } while inBytesLeft > 0
-        
+
         iconv_close(conversionDescriptor)
-        
+
         return outputData
     }
-    
+
     /**
      Decode a byte array to `String` using iconv directly.
      If you want to control whether `String` has BOM, change value of `internalEncoding`.
-     
+
      - parameter pointer: Pointer to bytes array to be decoded.
      - parameter count: Count of the bytes array to be decoded.
      - parameter internalEncoding: The character encoding as `String.Encoding` which is used to convert bytes array to `String` object. Default value is .utf16.
@@ -217,26 +217,29 @@ extension String {
         guard let decoded = String(data: outputData, encoding: internalEncoding.stringEncoding) else { throw IconvError.decodeError }
         return decoded
     }
-    
+
     /**
      Decode `Data` object to `String` using iconv directly.
-     
+
      - parameter data: `Data` object to be decoded.
      - parameter fromCode: The character encoding of bytes array to be decoded.
      - parameter discardIllegalSequence: Enables transliteration.
      - parameter transliterate: Determines if illegal sequences are discarded or not.
      - returns: Data.
      */
-    static func decode(data: Data, toCode: String, fromCode: String, discardIllegalSequence: Bool = false, transliterate: Bool = false) throws -> Data {
-        return try data.withUnsafeBytes({ (pointer: UnsafePointer<Int8>) throws -> Data in
-            return try String.decode(pointer: pointer, count: data.count, toCode: toCode, fromCode: fromCode, discardIllegalSequence: discardIllegalSequence, transliterate: transliterate)
-        })
+    public static func decode(data: Data, toCode: String, fromCode: String, discardIllegalSequence: Bool = false, transliterate: Bool = false) throws -> Data {
+        return try data.withUnsafeBytes {
+            guard let pointer = $0.bindMemory(to: Int8.self).baseAddress else {
+                throw IconvError.unknownError(code: 0)
+            }
+            return try decode(pointer: pointer, count: data.count, toCode: toCode, fromCode: fromCode, discardIllegalSequence: discardIllegalSequence, transliterate: transliterate)
+        }
     }
-    
+
     /**
      Decode `Data` object to `String` using iconv directly.
      If you want to control whether `String` has BOM, change value of `internalEncoding`.
-     
+
      - parameter data: `Data` object to be decoded.
      - parameter internalEncoding: The character encoding as `String.Encoding` which is used to convert bytes array to `String` object. Default value is .utf16.
      - parameter fromCode: The character encoding of bytes array to be decoded.
@@ -244,10 +247,12 @@ extension String {
      - parameter transliterate: Determines if illegal sequences are discarded or not.
      - returns: String.
      */
-    static func decode(data: Data, internalEncoding: IconvInternlEncoding = .utf16, fromCode: String, discardIllegalSequence: Bool = false, transliterate: Bool = false) throws -> String {
-        return try data.withUnsafeBytes({ (pointer: UnsafePointer<Int8>) throws -> String in
+    public static func decode(data: Data, internalEncoding: IconvInternlEncoding = .utf16, fromCode: String, discardIllegalSequence: Bool = false, transliterate: Bool = false) throws -> String {
+        return try data.withUnsafeBytes {
+            guard let pointer = $0.bindMemory(to: Int8.self).baseAddress else {
+                throw IconvError.unknownError(code: 0)
+            }
             return try decode(pointer: pointer, count: data.count, internalEncoding: internalEncoding, fromCode: fromCode, discardIllegalSequence: discardIllegalSequence, transliterate: transliterate)
-        })
+        }
     }
 }
-
